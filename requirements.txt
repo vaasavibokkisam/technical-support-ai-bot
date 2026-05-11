@@ -1,0 +1,13 @@
+
+
+pdfplumber
+langchain
+langchain-text-splitters
+langchain-community
+sentence-transformers
+chromadb
+requests
+streamlit
+python-dotenv
+torch
+transformers
