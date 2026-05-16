@@ -22,8 +22,8 @@ import chromadb                                               # local vector dat
 CHROMA_DB_PATH  = "./chroma_db"            # folder where ChromaDB persists data
 COLLECTION_NAME = "upwork_api_docs"        # name of the vector collection
 EMBED_MODEL     = "sentence-transformers/all-MiniLM-L6-v2"  # free local model
-CHUNK_SIZE      = 500                      # characters per chunk (assignment req)
-CHUNK_OVERLAP   = 50                       # overlap between consecutive chunks
+CHUNK_SIZE      = 800                   # characters per chunk (assignment req)
+CHUNK_OVERLAP   = 150                      # overlap between consecutive chunks
 
 
 def load_pdf(pdf_path: str) -> str:

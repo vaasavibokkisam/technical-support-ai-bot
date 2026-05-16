@@ -1,33 +1,41 @@
 """
 app.py — Streamlit UI
 =====================
-
 Frontend for the Upwork API Technical Support Bot.
-
 Run:
     streamlit run app.py
 """
 
+import os
 import html
+import subprocess
 import streamlit as st
 from dotenv import load_dotenv
 import chromadb
 
-# ── Load environment variables ────────────────────────────────────────────────
+# ── Load environment variables ─────────────────────────────────────────────
 load_dotenv()
 
-# ── Constants ────────────────────────────────────────────────────────────────
-CHROMA_DB_PATH = "./chroma_db"
-COLLECTION_NAME = "upwork_api_docs"
+# ── Read API key from Streamlit secrets OR .env ────────────────────────────
+# This works both locally and on Streamlit Cloud
+try:
+    os.environ["DEEPINFRA_API_KEY"] = st.secrets["DEEPINFRA_API_KEY"]
+except Exception:
+    pass  # will fall back to .env file loaded above
 
-# ── Page Configuration ───────────────────────────────────────────────────────
+# ── Constants ──────────────────────────────────────────────────────────────
+CHROMA_DB_PATH  = "./chroma_db"
+COLLECTION_NAME = "upwork_api_docs"
+PDF_PATH        = "API Documentation Partial.pdf"
+
+# ── Page Configuration ─────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Upwork API Support Bot",
     page_icon="🤖",
     layout="wide",
 )
 
-# ── Custom CSS ───────────────────────────────────────────────────────────────
+# ── Custom CSS ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
     .main-header {
@@ -36,13 +44,11 @@ st.markdown("""
         color: #14a800;
         margin-bottom: 0.2rem;
     }
-
     .sub-header {
         color: #666;
         font-size: 1rem;
         margin-bottom: 1.5rem;
     }
-
     .answer-box {
         background: #f0faf0;
         border-left: 4px solid #14a800;
@@ -52,7 +58,6 @@ st.markdown("""
         white-space: pre-wrap;
         line-height: 1.6;
     }
-
     .source-box {
         background: #fafafa;
         border: 1px solid #e0e0e0;
@@ -66,22 +71,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Header ───────────────────────────────────────────────────────────────────
+# ── Header ─────────────────────────────────────────────────────────────────
 st.markdown(
     '<div class="main-header">🤖 Upwork API Support Bot</div>',
     unsafe_allow_html=True,
 )
-
 st.markdown(
-    '<div class="sub-header">'
-    'Powered by RAG + Meta-Llama-3.1 via DeepInfra'
-    '</div>',
+    '<div class="sub-header">Powered by RAG + Meta-Llama-3.1 via DeepInfra</div>',
     unsafe_allow_html=True,
 )
-
 st.divider()
 
-# ── Sidebar ──────────────────────────────────────────────────────────────────
+# ── Sidebar ────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## Upwork API Bot")
     st.info(
@@ -89,32 +90,50 @@ with st.sidebar:
         "Retrieval-Augmented Generation (RAG) pipeline."
     )
 
-# ── Check ChromaDB ───────────────────────────────────────────────────────────
+# ── Auto Ingestion ─────────────────────────────────────────────────────────
+# If chroma_db does not exist, run ingest.py automatically
+# This is needed for Streamlit Cloud deployment
+def run_ingestion():
+    if not os.path.exists(CHROMA_DB_PATH):
+        if os.path.exists(PDF_PATH):
+            with st.spinner("⏳ Setting up the knowledge base... please wait (this only happens once)..."):
+                result = subprocess.run(
+                    ["python", "ingest.py", "--doc", PDF_PATH],
+                    capture_output=True,
+                    text=True
+                )
+                if result.returncode == 0:
+                    st.success("✅ Knowledge base ready!")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Ingestion failed: {result.stderr}")
+                    st.stop()
+        else:
+            st.error(
+                f"❌ PDF not found: '{PDF_PATH}'\n\n"
+                "Make sure the PDF is uploaded to your GitHub repository."
+            )
+            st.stop()
+
+run_ingestion()
+
+# ── Check ChromaDB ─────────────────────────────────────────────────────────
 def chroma_ready():
     try:
-        client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+        client     = chromadb.PersistentClient(path=CHROMA_DB_PATH)
         collection = client.get_collection(COLLECTION_NAME)
         return collection.count() > 0
     except Exception:
         return False
 
-
 if not chroma_ready():
-    st.error(
-        """
-❌ ChromaDB collection not found.
-
-Run ingestion first:
-
-python ingest.py --doc API_Documentation.pdf
-"""
-    )
+    st.error("❌ ChromaDB collection not found. Please refresh the page.")
     st.stop()
 
-# ── Import RAG Pipeline ──────────────────────────────────────────────────────
+# ── Import RAG Pipeline ────────────────────────────────────────────────────
 from rag import answer_question
 
-# ── Input Area ───────────────────────────────────────────────────────────────
+# ── Input Area ─────────────────────────────────────────────────────────────
 col1, col2 = st.columns([5, 1])
 
 with col1:
@@ -132,7 +151,7 @@ with col2:
         type="primary",
     )
 
-# ── Response ─────────────────────────────────────────────────────────────────
+# ── Response ───────────────────────────────────────────────────────────────
 if ask_btn and user_query.strip():
 
     with st.spinner("Retrieving documents and querying LLM..."):
@@ -145,24 +164,23 @@ if ask_btn and user_query.strip():
             st.error(f"❌ Error: {e}")
             st.stop()
 
-    # ── Metrics ──────────────────────────────────────────────────────────────
+    # Metrics
     m1, m2, m3 = st.columns(3)
-    m1.metric("⏱️ Latency", f"{result['latency']} s")
+    m1.metric("⏱️ Latency",    f"{result['latency']} s")
     m2.metric("📄 Chunks Used", len(result["sources"]))
-    m3.metric("🤖 Model", "Llama-3.1-8B")
+    m3.metric("🤖 Model",      "Llama-3.1-8B")
 
     st.divider()
 
-    # ── Answer ───────────────────────────────────────────────────────────────
+    # Answer
     st.markdown("### 💬 Answer")
     st.markdown(
         f'<div class="answer-box">{html.escape(result["answer"])}</div>',
         unsafe_allow_html=True,
     )
 
-    # ── Sources ──────────────────────────────────────────────────────────────
+    # Sources
     st.markdown("### 📚 Retrieved Sources")
-
     for i, source in enumerate(result["sources"], start=1):
         with st.expander(
             f"Source {i} — {source['id']} (distance: {source['distance']})",
@@ -186,7 +204,7 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-# ── Footer ───────────────────────────────────────────────────────────────────
+# ── Footer ─────────────────────────────────────────────────────────────────
 st.divider()
 st.caption(
     "⚠️ Answers are generated only from the provided Upwork API documentation."

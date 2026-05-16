@@ -19,7 +19,7 @@ import chromadb
 CHROMA_DB_PATH  = "./chroma_db"
 COLLECTION_NAME = "upwork_api_docs"
 EMBED_MODEL     = "sentence-transformers/all-MiniLM-L6-v2"
-TOP_K           = 3          # number of chunks to retrieve (assignment requirement)
+TOP_K           = 5          # number of chunks to retrieve (assignment requirement)
 
 # DeepInfra OpenAI-compatible endpoint
 # DeepInfra exposes an OpenAI-style /v1/openai/chat/completions endpoint,
@@ -165,7 +165,7 @@ def query_llm(user_question: str, chunks: list[dict]) -> tuple[str, float]:
             {"role": "system", "content": system_message},
             {"role": "user",   "content": user_question},
         ],
-        "temperature": 0.1,    # low temperature → focused, deterministic answers
+        "temperature": 0.3,    # low temperature → focused, deterministic answers
         "max_tokens":  512,    # enough for a thorough technical answer
     }
 
